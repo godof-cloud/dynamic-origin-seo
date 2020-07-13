@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Lambda Edge functions to change dynamically the origin when the User-Agent belongs to a robot
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+
+  bucketRegionTarget:
+    Description: "Region where the bucket that serves the static will be created, for example us-east-1"
+    Type: String
+  
+Resources:  
+  DynamicOriginLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${prefix}-lambda-role'
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com, edgelambda.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+  LambdaBotDetector:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub '${prefix}-lambda-bot-detector'
+      Description: 'Detects if the request is coming from Robots'
+      Handler: index.handler
+      Role: !GetAtt DynamicOriginLambdaRole.Arn
+      Code:
+        ZipFile: |
+          'use strict';
+
+          const regex = /aolbuild|baidu|bingbot|bingpreview|msnbot|duckduckgo|adsbot-google|googlebot|mediapartners-google|teoma|slurp|yandex|bot|crawl|spider/g;
+          exports.handler = (event, context, callback) => {
+            console.log('Event: ' + JSON.stringify(event));
+
+            const request = event.Records[0].cf.request;
+            const user_agent = request['headers']['user-agent'][0]['value'].toLowerCase();
+            if(user_agent !== undefined) {
+              const found = user_agent.match(regex);
+              request['headers']['is-robot'] = [
+                {
+                  key: 'is-robot',
+                  value: `${found !== null}`
+                }
+              ]
+            }
+
+            console.log('Request: ' + JSON.stringify(request));
+            callback(null, request);
+          };
+      Runtime: "nodejs10.x"
+      Timeout: 5
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1      
+
+  LambdaChangeS3Origin:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub '${prefix}-lambda-change-origin' 
+      Description: 'Change the origin to get the resources depending on if the request is made by a Robot'
+      Handler: "index.handler"
+      Role: !GetAtt DynamicOriginLambdaRole.Arn
+      Code:
+        ZipFile: 
+          !Sub |
+          'use strict';
+
+          exports.handler = (event, context, callback) => {
+            console.log('Event: ' + JSON.stringify(event));
+
+            const request = event.Records[0].cf.request;
+            let is_robot;
+            if ('is-robot' in request['headers']) {
+              is_robot = request['headers']['is-robot'][0].value.toLowerCase();              
+            }
+
+            if (is_robot === 'true') {
+              request.origin = {
+                s3: {
+                  authMethod: 'origin-access-identity',
+                  path: '',
+                  domainName: '${prefix}-webapp-static-${AWS::AccountId}.s3.${bucketRegionTarget}.amazonaws.com',
+                  region: '${bucketRegionTarget}',
+                  customHeaders: {}
+                }
+              };
+
+              request.headers['host'] = [{key: 'host', value: '${prefix}-webapp-static-${AWS::AccountId}.s3.${bucketRegionTarget}.amazonaws.com'}];
+            }
+
+            console.log('Request: ' + JSON.stringify(request));
+            callback(null, request);
+          };
+      Runtime: nodejs10.x
+      Timeout: 20
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1     
+
+  PublishLambdaVersionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${prefix}-publish-lambda-version-role' 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub '${prefix}-publish-lambda-version-policy' 
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action: lambda:PublishVersion
+              Resource: 
+                - !GetAtt LambdaBotDetector.Arn
+                - !GetAtt LambdaChangeS3Origin.Arn
+
+  PublishLambdaVersion:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${prefix}-publish-lambda-version'
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Role: !GetAtt PublishLambdaVersionRole.Arn
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk')
+          const response = require('cfn-response')
+          const lambda = new AWS.Lambda()
+
+          exports.handler = (event, context) => {
+          
+            if (event.RequestType == 'Delete') {
+              return response.send(event, context, response.SUCCESS);
+            }
+          
+            console.log(event.ResourceProperties.FunctionName);
+          
+            lambda.publishVersion({FunctionName: event.ResourceProperties.FunctionName}, (err, data) => {
+              console.log("Lambda Publish Version Response");
+              if(err) {
+                console.log("ERROR!!!");
+                response.send(event, context, response.FAILED, err);
+              } else {
+                console.log(data);
+                response.send(event, context, response.SUCCESS, data); 
+              }
+            });
+          }
+
+  LambdaBotDetectorVersion:
+    Type: Custom::LatestLambdaVersion
+    Properties:
+      ServiceToken: !GetAtt PublishLambdaVersion.Arn
+      FunctionName: !Ref LambdaBotDetector
+
+  LambdaChangeS3OriginVersion:
+    Type: Custom::LatestLambdaVersion
+    Properties:
+      ServiceToken: !GetAtt PublishLambdaVersion.Arn
+      FunctionName: !Ref LambdaChangeS3Origin
+
+Outputs:
+  LambdaBotDetectorName:
+    Description: Lambda Name function to detect bots
+    Value: !Ref LambdaBotDetector
+      
+  LambdaBotDetectorFunctionArn:
+    Description: Lambda function to change the origin Function ARN
+    Value: !GetAtt LambdaBotDetectorVersion.FunctionArn
+    Export:
+      Name: 'lambda-bot-detector-function-arn'
+
+  LambdaChangeS3OriginName:
+    Description: Lambda function Name to change the origin
+    Value: !Ref LambdaChangeS3Origin
+      
+  LambdaChangeS3OriginFunctionArn:
+    Description: Lambda function to change the origin Function ARN
+    Value: !GetAtt LambdaChangeS3OriginVersion.FunctionArn
+    Export:
+      Name: 'lambda-change-origin-function-arn'

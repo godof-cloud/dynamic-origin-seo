@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Master Cloudformation Template to create the resources to dynamically change the S3 origin
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+    Default: dynamic-origin
+  
+  resourcesBucket:
+    Type: String
+    Description: Bucket where all the templates are
+  
+  bucketRegionTarget:
+    Description: "Region where the bucket that serves the static will be created, for example us-east-1"
+    Type: String
+  
+Resources:  
+  DynamicOriginLambdaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${resourcesBucket}.s3.amazonaws.com/templates-us-east-1/stack-dynamic-origin-lambda.yml'
+      Parameters:
+        prefix: !Ref prefix
+        bucketRegionTarget: !Ref bucketRegionTarget
+        
+  DynamicOriginPermissionsStack:
+   Type: AWS::CloudFormation::Stack
+   Properties:
+     TemplateURL: !Sub 'https://${resourcesBucket}.s3.amazonaws.com/templates-us-east-1/stack-dynamic-origin-permissions.yml'
+     Parameters:
+       lambdaBotDetectorFunctionArn: !GetAtt DynamicOriginLambdaStack.Outputs.LambdaBotDetectorFunctionArn
+       lambdaChangeOriginFunctionArn: !GetAtt DynamicOriginLambdaStack.Outputs.LambdaChangeS3OriginFunctionArn

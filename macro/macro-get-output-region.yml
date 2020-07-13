@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+  Template that creates the Macro to get an output value from Cloudformation stacks in other regions
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+    Default: dynamic-origin
+  resourcesBucket:
+    Type: String
+    Description: Bucket where all the templates are
+  
+Resources:
+  LambdaGetOutputRegionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${prefix}-lambda-get-output-region-role'
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+      Policies:
+      - PolicyName: !Sub '${prefix}-lambda-get-output-region-policy'
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 
+              - cloudformation:ListExports
+            Resource: '*'
+
+  LambdaGetOutputRegion:
+    Type: AWS::Lambda::Function
+    DependsOn: [ LambdaGetOutputRegionRole ]
+    Properties:
+      FunctionName: 'lambda-get-output-region'
+      Description: Lambda function gets an output from cloudformation stacks in other regions
+      Handler: cloud.godof.lambda.output.region.Handler
+      Role: !GetAtt LambdaGetOutputRegionRole.Arn
+      Code:
+        S3Bucket: !Ref resourcesBucket
+        S3Key: 'artifacts/lambda-output-region.jar'
+      Runtime: "java8"
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: 1
+  
+  MacroGetOutputRegion:
+      Type: AWS::CloudFormation::Macro
+      DependsOn: [ LambdaGetOutputRegion ]
+      Properties:
+        Name: 'GetOutputRegion'
+        Description: "Get the output value from other regions"
+        FunctionName: !Ref LambdaGetOutputRegion
+
+Outputs:
+  MacroName:
+    Value: !Ref MacroGetOutputRegion
+    Export:
+      Name: !Sub "${AWS::StackName}-macro-output-region"

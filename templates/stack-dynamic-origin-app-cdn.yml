@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cloudformation Template to create the Cloudfront distribution
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+  
+  dynamicBucketDomain:
+    Type: String
+    Description: Bucket Origin
+
+  oaiReference:
+    Type: String
+    Description: Origin Access Identity Canonical UserId
+  
+  # botDetectorLambdaFunctionArn:
+  #   Type: String
+  #   Description: BotDetector Lambda Function ARN with version
+  
+  # changeS3OriginLambdaFunctionArn:
+  #   Type: String
+  #   Description: Cahnge S3 Origin Lambda Function ARN with version
+
+Resources:  
+  CloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: 'dynamic webapp distribution'
+        PriceClass: PriceClass_All
+        Enabled: true
+        HttpVersion: 'http2'        
+        Origins:
+          - Id: DynamicS3Origin
+            DomainName: !Ref dynamicBucketDomain
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${oaiReference}'
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS            
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          TargetOriginId: DynamicS3Origin
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: none
+            Headers:
+              - is-robot
+          LambdaFunctionAssociations: 
+            - EventType: viewer-request
+            - EventType: origin-request
+          Fn::Transform: 
+            Name: "GetOutputRegion"
+            Parameters:
+              TargetRegion: 'us-east-1'
+              ParentProperty: LambdaFunctionAssociations
+              PropertyName: LambdaFunctionARN
+              OutputNames: 
+                - lambda-bot-detector-function-arn
+                - lambda-change-origin-function-arn
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: "/index.html"
+        - ErrorCode: 404
+          ResponseCode: 200
+          ResponsePagePath: "/index.html"
+      Tags:
+        - Key: Name
+          Value: !Sub '${prefix}-webapp-dynamic-cloudfront'

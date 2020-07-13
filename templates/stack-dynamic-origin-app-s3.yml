@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cloudformation Template to create S3 buckets to copy the dynamic and the static app
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+  
+  oaiCanonicalUserId:
+    Type: String
+    Description: Origin Access Identity Canonical UserId
+
+Resources:  
+  WebappDynamicBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${prefix}-webapp-dynamic-${AWS::AccountId}'
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html  
+      Tags:
+      - Key: Name
+        Value: !Sub '${prefix}-webapp-dynamic-${AWS::AccountId}'
+  
+  WebappDynamicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebappDynamicBucket
+      PolicyDocument:
+        Id: WebappDynamicBucketPolicy
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !Ref oaiCanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${WebappDynamicBucket}/*'
+
+  WebappStaticBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${prefix}-webapp-static-${AWS::AccountId}'
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+      - Key: Name
+        Value: !Sub '${prefix}-webapp-static-${AWS::AccountId}'
+  
+  WebappStaticBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebappStaticBucket
+      PolicyDocument:
+        Id: WebappStaticBucketPolicy
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !Ref oaiCanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${WebappStaticBucket}/*'
+
+Outputs:
+  WebappDynamicDomain:
+    Value: !GetAtt WebappDynamicBucket.RegionalDomainName  
+
+  WebappStaticDomain:
+    Value: !GetAtt WebappStaticBucket.RegionalDomainName
+    

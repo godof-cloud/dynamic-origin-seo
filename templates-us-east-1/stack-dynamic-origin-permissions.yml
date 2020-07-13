@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Lambda functions permissions to be invoked by Cloudfront
+
+Parameters:
+  lambdaBotDetectorFunctionArn:
+    Description: "Lambda function to detect bots function ARN with version"
+    Type: String
+
+  lambdaChangeOriginFunctionArn:
+    Description: "Lambda function to Change Origin function ARN with version"
+    Type: String
+  
+Resources:  
+  LambdaDetectBotsPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref lambdaBotDetectorFunctionArn
+      Principal: 'cloudfront.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+  
+  LambdaChangeOriginPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref lambdaChangeOriginFunctionArn
+      Principal: 'cloudfront.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'

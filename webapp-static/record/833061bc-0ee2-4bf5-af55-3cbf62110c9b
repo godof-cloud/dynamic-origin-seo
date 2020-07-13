@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CloudMostwanted</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+	.app-title {
+		display: flex;
+		justify-content: center;
+		font-family: western;
+		font-size: 100px;
+	}
+	.reward {
+		display: flex;
+		justify-content: center;
+		font-family: laredo;
+		font-size: 60px;
+		margin: 20px 0 50px 0;
+	}
+	.record-layout {
+		display: grid;
+		grid-template-columns: 140px 1fr;
+		grid-template-areas: "picture details";
+		margin-left: 100px;
+	}
+	.record-picture {
+		grid-area: picture;
+		background-repeat: no-repeat;
+		background-size: contain;
+		width: 140px;
+		height: 140px;
+	}
+	.record-details {
+		grid-area: details;
+		display: grid;
+		grid-template-columns: 75px 1fr;
+		padding: 0px 25px;
+		font-family: saloon;
+		font-size: 25px;
+	}
+	.label:after {
+		content: ':';
+		font-size: 25px;
+	}
+	.notFound {
+		display: flex;
+		justify-content: center;
+		font-family: laredo;
+		font-size: 60px;
+		margin: 20px 0 50px 0;
+	}
+  </style>
+</head>
+<body>
+  <div class="app-title">Cloud Most Wanted</div>
+<div>
+  <div>
+    <div class="reward">Reward: $77000</div>
+    <div class="record-layout">
+        <div class="record-picture"></div>
+        <div class="record-details">
+            <div class="label">Name</div>
+            <div>Identity Access Management</div>
+    
+            <div class="label">Alias</div>
+            <div>IAM</div>
+    
+            <div class="label">Gang</div>
+            <div>Security, Identity & Compliance</div>
+    
+            <div class="label">Profile</div>
+            <div>Provide all sorts of credentials and policies to other members of the organization to access resources</div>
+        </div>
+    </div>
+</div>
+</div>
+</body>
+</html>

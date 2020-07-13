@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Master Cloudformation Template to create the resources to test the dynamic origin
+
+Parameters:
+  prefix:
+    Type: String
+    Description: Prefix name for the resources
+    Default: dynamic-origin
+  
+  resourcesBucket:
+    Type: String
+    Description: Bucket where all the templates are
+
+Resources:  
+  CDNOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: 'CloudFront OAI for Bucket Origins'
+
+  S3Stack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${resourcesBucket}.s3.amazonaws.com/templates/stack-dynamic-origin-app-s3.yml'
+      Parameters:
+        prefix: !Ref prefix
+        oaiCanonicalUserId: !GetAtt CDNOriginAccessIdentity.S3CanonicalUserId
+        
+  CloudfrontStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${resourcesBucket}.s3.amazonaws.com/templates/stack-dynamic-origin-app-cdn.yml'
+      Parameters:
+        prefix: !Ref prefix
+        dynamicBucketDomain: !GetAtt S3Stack.Outputs.WebappDynamicDomain
+        oaiReference: !Ref CDNOriginAccessIdentity
